@@ -3,6 +3,7 @@ let timeLeft = parseInt(localStorage.getItem('timeLeft')) || 300;
 let timerId = null;
 let totalElapsedSeconds = parseInt(localStorage.getItem('totalElapsedSeconds')) || 0;
 let speedMultiplier = 1;
+let lastTick = Date.now();
 
 function format(s) { return Math.floor(s/60) + ":" + (s%60).toString().padStart(2,'0'); }
 
@@ -17,6 +18,11 @@ function update() {
     
     document.getElementById('totalElapsed').innerText = Math.floor(totalElapsedSeconds / 60);
     
+    const fiveSecondCount = Math.floor(totalElapsedSeconds / 5);
+    if(document.getElementById('fiveSecondCount')) {
+        document.getElementById('fiveSecondCount').innerText = fiveSecondCount;
+    }
+    
     localStorage.setItem('totalTime', totalTime);
     localStorage.setItem('timeLeft', timeLeft);
 }
@@ -24,18 +30,28 @@ function update() {
 function startTimer() {
     if(timerId) return;
     document.getElementById('status').innerText = "running";
+    lastTick = Date.now();
     
     timerId = setInterval(() => {
-        if (timeLeft > 0) {
-            timeLeft--;
-            totalElapsedSeconds++;
-            localStorage.setItem('totalElapsedSeconds', totalElapsedSeconds);
-            update();
-        } else {
-            pauseTimer();
-            document.getElementById('sessions').innerText = parseInt(document.getElementById('sessions').innerText) + 1;
+        const now = Date.now();
+        // Calculate real seconds passed, apply multiplier only if app is open
+        const elapsedRealSeconds = Math.floor((now - lastTick) / 1000);
+        
+        if (elapsedRealSeconds >= 1) {
+            const secondsToDeduct = elapsedRealSeconds * speedMultiplier;
+            
+            if (timeLeft > 0) {
+                timeLeft = Math.max(0, timeLeft - secondsToDeduct);
+                totalElapsedSeconds += secondsToDeduct;
+                localStorage.setItem('totalElapsedSeconds', totalElapsedSeconds);
+                lastTick = now;
+                update();
+            } else {
+                pauseTimer();
+                document.getElementById('sessions').innerText = parseInt(document.getElementById('sessions').innerText) + 1;
+            }
         }
-    }, 1000 / speedMultiplier);
+    }, 100); // Check frequently to keep it smooth
 }
 
 function pauseTimer() { 
@@ -61,11 +77,6 @@ function setSpeed(newSpeed, element) {
     const buttons = document.querySelectorAll('.speed-controls button');
     buttons.forEach(btn => btn.classList.remove('active'));
     element.classList.add('active');
-    
-    if(timerId) {
-        pauseTimer();
-        startTimer();
-    }
 }
 
 update();
