@@ -1,38 +1,26 @@
-<div class="timer-card">
-    <div id="time">05:00</div>
-    <div id="percentage">100% left</div>
-    <div class="status" id="status">paused</div>
-</div>
-
-<div class="progress-section" style="max-width: 400px; margin: 0 auto 20px;">
-    <div class="progress-labels">
-        <span>ELAPSED: <span id="elapsed">0:00</span></span>
-        <span>TOTAL: <span id="total">5:00</span></span>
+<div class="timer-container">
+    <svg class="timer-ring" width="300" height="300">
+        <circle class="ring-bg" cx="150" cy="150" r="140"></circle>
+        <circle class="ring-fill" cx="150" cy="150" r="140" id="ring"></circle>
+    </svg>
+    <div class="time-display">
+        <div id="time">05:00</div>
+        <div id="percentage">100% left</div>
     </div>
-    <div class="progress-bar"><div class="progress-fill" id="fill"></div></div>
 </div>
 
 <div class="controls">
-    <button onclick="resetTimer()">✕</button>
-    <button class="play" onclick="startTimer()">▶</button>
-    <button onclick="pauseTimer()">⏸</button>
+    <button class="btn btn-cancel" onclick="resetTimer()">Cancel</button>
+    <button class="btn btn-start" id="actionBtn" onclick="toggleTimer()">Start</button>
 </div>
 
 <div class="adjust">
-    <div>
-        <button onclick="addTime(-300)">-5m</button>
-        <button onclick="addTime(-600)">-10m</button>
-        <button onclick="addTime(-900)">-15m</button>
-        <button onclick="addTime(-1800)">-30m</button>
-        <button onclick="addTime(-3600)">-60m</button>
-    </div>
-    <div>
-        <button onclick="addTime(300)">+5m</button>
-        <button onclick="addTime(600)">+10m</button>
-        <button onclick="addTime(900)">+15m</button>
-        <button onclick="addTime(1800)">+30m</button>
-        <button onclick="addTime(3600)">+60m</button>
-    </div>
+    <button onclick="addTime(-300)">-5m</button>
+    <button onclick="addTime(-900)">-15m</button>
+    <button onclick="addTime(-3600)">-60m</button>
+    <button onclick="addTime(300)">+5m</button>
+    <button onclick="addTime(900)">+15m</button>
+    <button onclick="addTime(3600)">+60m</button>
 </div>
 
 <div class="speed-controls">
@@ -45,10 +33,9 @@
 </div>
 
 <div class="stats">
-    <h3>📊 Stats</h3>
-    <p>Sessions Completed: <span id="sessions">0</span></p>
-    <p>Total Time Elapsed: <span id="totalElapsed">0</span> minutes</p>
-    <p>5-Second Intervals: <span id="fiveSecondCount">0</span></p>
+    <p>Sessions: <span id="sessions">0</span></p>
+    <p>Total Elapsed: <span id="totalElapsed">0</span> min</p>
+    <p>5-Sec Intervals: <span id="fiveSecondCount">0</span></p>
 </div>
 
 <script>
@@ -58,70 +45,63 @@
     let totalElapsedSeconds = parseInt(localStorage.getItem('totalElapsedSeconds')) || 0;
     let speedMultiplier = 1;
     let lastTick = parseInt(localStorage.getItem('lastTick')) || Date.now();
+    const circumference = 2 * Math.PI * 140;
+
+    document.getElementById('ring').style.strokeDasharray = circumference;
 
     function format(s) { return Math.floor(s/60) + ":" + (s%60).toString().padStart(2,'0'); }
 
     function update() {
         document.getElementById('time').innerText = format(timeLeft);
-        document.getElementById('elapsed').innerText = format(totalTime - timeLeft);
-        document.getElementById('total').innerText = format(totalTime);
-        document.getElementById('fill').style.width = ((totalTime - timeLeft) / totalTime * 100) + "%";
-        
         const percent = Math.max(0, Math.round((timeLeft / totalTime) * 100));
         document.getElementById('percentage').innerText = `${percent}% left`;
         
-        document.getElementById('totalElapsed').innerText = Math.floor(totalElapsedSeconds / 60);
+        const offset = circumference - (timeLeft / totalTime) * circumference;
+        document.getElementById('ring').style.strokeDashoffset = offset;
         
-        const fiveSecondCount = Math.floor(totalElapsedSeconds / 5);
-        if(document.getElementById('fiveSecondCount')) {
-            document.getElementById('fiveSecondCount').innerText = fiveSecondCount;
-        }
+        document.getElementById('totalElapsed').innerText = Math.floor(totalElapsedSeconds / 60);
+        document.getElementById('fiveSecondCount').innerText = Math.floor(totalElapsedSeconds / 5);
         
         localStorage.setItem('totalTime', totalTime);
         localStorage.setItem('timeLeft', timeLeft);
     }
 
-    function handleTick() {
-        const now = Date.now();
-        const elapsedRealSeconds = Math.floor((now - lastTick) / 1000);
-        
-        if (elapsedRealSeconds >= 1) {
-            const secondsToDeduct = elapsedRealSeconds * speedMultiplier;
-            
-            if (timeLeft > 0) {
-                timeLeft = Math.max(0, timeLeft - secondsToDeduct);
-                totalElapsedSeconds += secondsToDeduct;
-                localStorage.setItem('totalElapsedSeconds', totalElapsedSeconds);
-                lastTick = now;
-                localStorage.setItem('lastTick', lastTick);
-                update();
-            } else {
-                pauseTimer();
-                document.getElementById('sessions').innerText = parseInt(document.getElementById('sessions').innerText) + 1;
-            }
-        }
+    function toggleTimer() {
+        if (timerId) pauseTimer();
+        else startTimer();
     }
 
     function startTimer() {
         if(timerId) return;
-        document.getElementById('status').innerText = "running";
+        document.getElementById('actionBtn').innerText = 'Pause';
+        document.getElementById('actionBtn').className = 'btn btn-pause';
         lastTick = Date.now();
-        localStorage.setItem('lastTick', lastTick);
         
-        timerId = setInterval(handleTick, 100);
+        timerId = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - lastTick) / 1000);
+            if (elapsed >= 1) {
+                const deduct = elapsed * speedMultiplier;
+                if (timeLeft > 0) {
+                    timeLeft = Math.max(0, timeLeft - deduct);
+                    totalElapsedSeconds += deduct;
+                    localStorage.setItem('totalElapsedSeconds', totalElapsedSeconds);
+                    lastTick = now;
+                    update();
+                } else {
+                    pauseTimer();
+                }
+            }
+        }, 100);
     }
 
     function pauseTimer() { 
-        clearInterval(timerId); 
-        timerId = null; 
-        document.getElementById('status').innerText = "paused"; 
+        clearInterval(timerId); timerId = null; 
+        document.getElementById('actionBtn').innerText = 'Start';
+        document.getElementById('actionBtn').className = 'btn btn-start';
     }
 
-    function resetTimer() { 
-        pauseTimer(); 
-        timeLeft = totalTime; 
-        update(); 
-    }
+    function resetTimer() { pauseTimer(); timeLeft = totalTime; update(); }
 
     function addTime(s) { 
         totalTime = Math.max(60, totalTime + s); 
@@ -129,18 +109,11 @@
         update(); 
     }
 
-    function setSpeed(newSpeed, element) {
-        speedMultiplier = newSpeed;
-        const buttons = document.querySelectorAll('.speed-controls button');
-        buttons.forEach(btn => btn.classList.remove('active'));
-        element.classList.add('active');
+    function setSpeed(s, el) {
+        speedMultiplier = s;
+        document.querySelectorAll('.speed-controls button').forEach(b => b.classList.remove('active'));
+        el.classList.add('active');
     }
-
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === 'visible' && timerId) {
-            handleTick();
-        }
-    });
 
     update();
 </script>
