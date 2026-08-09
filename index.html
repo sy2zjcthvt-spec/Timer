@@ -1,87 +1,146 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Timer App</title>
-    <style>
-        body { background-color: #121212; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
-        .timer-card { background-color: #2c2c2e; border-radius: 15px; padding: 30px; max-width: 400px; margin: 0 auto 20px; }
-        #time { font-size: 4.5rem; font-weight: 200; }
-        #percentage { font-size: 1.2rem; color: #aaa; margin-top: 5px; }
-        .status { color: #8e8e93; font-size: 1.2rem; margin-top: 10px; }
+<div class="timer-card">
+    <div id="time">05:00</div>
+    <div id="percentage">100% left</div>
+    <div class="status" id="status">paused</div>
+</div>
+
+<div class="progress-section" style="max-width: 400px; margin: 0 auto 20px;">
+    <div class="progress-labels">
+        <span>ELAPSED: <span id="elapsed">0:00</span></span>
+        <span>TOTAL: <span id="total">5:00</span></span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="fill"></div></div>
+</div>
+
+<div class="controls">
+    <button onclick="resetTimer()">✕</button>
+    <button class="play" onclick="startTimer()">▶</button>
+    <button onclick="pauseTimer()">⏸</button>
+</div>
+
+<div class="adjust">
+    <div>
+        <button onclick="addTime(-300)">-5m</button>
+        <button onclick="addTime(-600)">-10m</button>
+        <button onclick="addTime(-900)">-15m</button>
+        <button onclick="addTime(-1800)">-30m</button>
+        <button onclick="addTime(-3600)">-60m</button>
+    </div>
+    <div>
+        <button onclick="addTime(300)">+5m</button>
+        <button onclick="addTime(600)">+10m</button>
+        <button onclick="addTime(900)">+15m</button>
+        <button onclick="addTime(1800)">+30m</button>
+        <button onclick="addTime(3600)">+60m</button>
+    </div>
+</div>
+
+<div class="speed-controls">
+    <button onclick="setSpeed(0.5, this)">0.5x</button>
+    <button class="active" onclick="setSpeed(1, this)">1x</button>
+    <button onclick="setSpeed(2, this)">2x</button>
+    <button onclick="setSpeed(5, this)">5x</button>
+    <button onclick="setSpeed(10, this)">10x</button>
+    <button onclick="setSpeed(20, this)">20x</button>
+</div>
+
+<div class="stats">
+    <h3>📊 Stats</h3>
+    <p>Sessions Completed: <span id="sessions">0</span></p>
+    <p>Total Time Elapsed: <span id="totalElapsed">0</span> minutes</p>
+    <p>5-Second Intervals: <span id="fiveSecondCount">0</span></p>
+</div>
+
+<script>
+    let totalTime = parseInt(localStorage.getItem('totalTime')) || 300;
+    let timeLeft = parseInt(localStorage.getItem('timeLeft')) || 300;
+    let timerId = null;
+    let totalElapsedSeconds = parseInt(localStorage.getItem('totalElapsedSeconds')) || 0;
+    let speedMultiplier = 1;
+    let lastTick = parseInt(localStorage.getItem('lastTick')) || Date.now();
+
+    function format(s) { return Math.floor(s/60) + ":" + (s%60).toString().padStart(2,'0'); }
+
+    function update() {
+        document.getElementById('time').innerText = format(timeLeft);
+        document.getElementById('elapsed').innerText = format(totalTime - timeLeft);
+        document.getElementById('total').innerText = format(totalTime);
+        document.getElementById('fill').style.width = ((totalTime - timeLeft) / totalTime * 100) + "%";
         
-        .progress-section { margin: 20px 0; }
-        .progress-labels { display: flex; justify-content: space-between; font-size: 0.8rem; color: #8e8e93; }
-        .progress-bar { background-color: #48484a; height: 4px; border-radius: 2px; margin: 5px 0; }
-        .progress-fill { background-color: white; height: 100%; width: 0%; }
+        const percent = Math.max(0, Math.round((timeLeft / totalTime) * 100));
+        document.getElementById('percentage').innerText = `${percent}% left`;
         
-        .controls button { background: #333; color: white; border: none; border-radius: 50%; width: 60px; height: 60px; font-size: 1.5rem; margin: 0 10px; cursor: pointer; }
-        .controls button.play { background: #007aff; }
+        document.getElementById('totalElapsed').innerText = Math.floor(totalElapsedSeconds / 60);
         
-        .adjust { margin: 20px 0; }
-        .adjust button { background: #333; color: white; border: none; border-radius: 50%; width: 55px; height: 55px; font-size: 0.9rem; margin: 5px; cursor: pointer; }
+        const fiveSecondCount = Math.floor(totalElapsedSeconds / 5);
+        if(document.getElementById('fiveSecondCount')) {
+            document.getElementById('fiveSecondCount').innerText = fiveSecondCount;
+        }
         
-        .speed-controls { margin: 20px 0; }
-        .speed-controls button { background: #333; color: white; border: none; padding: 10px 15px; margin: 0 5px; border-radius: 15px; cursor: pointer; }
-        .speed-controls button.active { background: #007aff; }
+        localStorage.setItem('totalTime', totalTime);
+        localStorage.setItem('timeLeft', timeLeft);
+    }
+
+    function handleTick() {
+        const now = Date.now();
+        const elapsedRealSeconds = Math.floor((now - lastTick) / 1000);
         
-        .stats { background: #2c2c2e; padding: 15px; border-radius: 10px; max-width: 400px; margin: 0 auto; text-align: left; }
-    </style>
-</head>
-<body>
+        if (elapsedRealSeconds >= 1) {
+            const secondsToDeduct = elapsedRealSeconds * speedMultiplier;
+            
+            if (timeLeft > 0) {
+                timeLeft = Math.max(0, timeLeft - secondsToDeduct);
+                totalElapsedSeconds += secondsToDeduct;
+                localStorage.setItem('totalElapsedSeconds', totalElapsedSeconds);
+                lastTick = now;
+                localStorage.setItem('lastTick', lastTick);
+                update();
+            } else {
+                pauseTimer();
+                document.getElementById('sessions').innerText = parseInt(document.getElementById('sessions').innerText) + 1;
+            }
+        }
+    }
 
-    <div class="timer-card">
-        <div id="time">05:00</div>
-        <div id="percentage">100% left</div>
-        <div class="status" id="status">paused</div>
-    </div>
+    function startTimer() {
+        if(timerId) return;
+        document.getElementById('status').innerText = "running";
+        lastTick = Date.now();
+        localStorage.setItem('lastTick', lastTick);
+        
+        timerId = setInterval(handleTick, 100);
+    }
 
-    <div class="progress-section" style="max-width: 400px; margin: 0 auto 20px;">
-        <div class="progress-labels">
-            <span>ELAPSED: <span id="elapsed">0:00</span></span>
-            <span>TOTAL: <span id="total">5:00</span></span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" id="fill"></div></div>
-    </div>
+    function pauseTimer() { 
+        clearInterval(timerId); 
+        timerId = null; 
+        document.getElementById('status').innerText = "paused"; 
+    }
 
-    <div class="controls">
-        <button onclick="resetTimer()">✕</button>
-        <button class="play" onclick="startTimer()">▶</button>
-        <button onclick="pauseTimer()">⏸</button>
-    </div>
+    function resetTimer() { 
+        pauseTimer(); 
+        timeLeft = totalTime; 
+        update(); 
+    }
 
-    <div class="adjust">
-        <div>
-            <button onclick="addTime(-300)">-5m</button>
-            <button onclick="addTime(-600)">-10m</button>
-            <button onclick="addTime(-900)">-15m</button>
-            <button onclick="addTime(-1800)">-30m</button>
-            <button onclick="addTime(-3600)">-60m</button>
-        </div>
-        <div>
-            <button onclick="addTime(300)">+5m</button>
-            <button onclick="addTime(600)">+10m</button>
-            <button onclick="addTime(900)">+15m</button>
-            <button onclick="addTime(1800)">+30m</button>
-            <button onclick="addTime(3600)">+60m</button>
-        </div>
-    </div>
+    function addTime(s) { 
+        totalTime = Math.max(60, totalTime + s); 
+        timeLeft = Math.max(0, timeLeft + s); 
+        update(); 
+    }
 
-    <div class="speed-controls">
-        <button onclick="setSpeed(0.5, this)">0.5x</button>
-        <button class="active" onclick="setSpeed(1, this)">1x</button>
-        <button onclick="setSpeed(2, this)">2x</button>
-        <button onclick="setSpeed(5, this)">5x</button>
-        <button onclick="setSpeed(10, this)">10x</button>
-    </div>
+    function setSpeed(newSpeed, element) {
+        speedMultiplier = newSpeed;
+        const buttons = document.querySelectorAll('.speed-controls button');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        element.classList.add('active');
+    }
 
-    <div class="stats">
-        <h3>📊 Stats</h3>
-        <p>Sessions Completed: <span id="sessions">0</span></p>
-        <p>Total Time Elapsed: <span id="totalElapsed">0</span> minutes</p>
-    </div>
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === 'visible' && timerId) {
+            handleTick();
+        }
+    });
 
-    <script src="app.js"></script>
-</body>
-</html>
+    update();
+</script>
